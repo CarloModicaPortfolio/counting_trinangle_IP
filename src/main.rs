@@ -4,15 +4,16 @@ use ark_std::{One, Zero, UniformRand};
 use ark_poly::{DenseMultilinearExtension, MultilinearExtension, Polynomial};
 use ark_poly::univariate::DensePolynomial;
 
-mod prover;
-mod verifier;
+mod protocol;
 
-use prover::proof_generation::prover;
-use verifier::verifier_check::verifier;
+use protocol::{prover::prover,verifier::verifier};
+use protocol::ProtocolState;
 
 fn print_type_of<T>(_: &T) {
     println!("{}", std::any::type_name::<T>())
 }
+
+pub(crate) const DIM: usize = 4;
 
 fn main() {
     //PROBLEM DEFINITION
@@ -24,13 +25,8 @@ fn main() {
                      F::zero(), F::one(), F::zero(), F::one(),
                      F::one(), F::zero(), F::one(), F::one()];
 
-
     //PROVER FIRST ROUND
 //==================================================================================================
-
-    let mut v_random_vector: Vec<F> = vec![];
-    let mut g_vector: Vec<DensePolynomial<F>> = vec![];
-
     // inizialize multiliniar extension of the function over the boolean hypercube
     let array_ext: DenseMultilinearExtension<F> = DenseMultilinearExtension { evaluations: array, num_vars: 4 };
     /*
@@ -39,50 +35,39 @@ fn main() {
     could be a way of doing so. I will continue the protocol pretending that array_ext is
     already multiplied by itself 3 times.
     */
-
-    // Compute sum C
-    let c_vect = array_ext.to_evaluations();
-    let C: F = c_vect.iter().sum();
-    // compute g_1(0) and g_1(1)
-    let mut c_left = F::zero();
-    let mut c_right = F::zero();
-    let c_comp = c_vect.clone();
-    for i in 0..8 {
-        c_left = c_left + c_comp[i];
-        c_right = c_right + c_comp[15 - i];
-    }
-
-    // Using g_1(0) and g_1(1) we can compute g_1(X_1), since we know it is linear
-    let g_1: DensePolynomial<F> = DensePolynomial { coeffs: vec![c_left, c_right - c_left] };
-    assert!(g_1.evaluate(&F::zero()) + g_1.evaluate(&F::one()) == C);
-    let mut rng = ark_std::rand::thread_rng();
-    let r1 = F::rand(&mut rng);
+    let state = ProtocolState.inizialize(&array_ext);
 
 
-    //REST OF THE PROTOCOL
+    //PROTOCOL
 //==================================================================================================
 
     // Vector where the verifier will store its random values.
+    let mut rng = ark_std::rand::thread_rng();
 
-    g_vector.push(g_1);
-    v_random_vector.push(r1);
+    for i in 0..DIM-1 {
+        g_vector.push(prover(&array_ext, v_random_vector.clone()));
+        if i == 0{
+            g_vector.push(prover(&array_ext, v_random_vector.clone()));
+            let c_vect = array_ext.to_evaluations();
+            let C: F = c_vect.iter().sum();
+            // compute g_1(0) and g_1(1)
 
-    println!("round 0");
-    for i in 0..3 {
-        g_vector.push(prover(array_ext.clone(), v_random_vector.clone()));
-        v_random_vector.push(verifier(g_vector[i].clone(), g_vector[i + 1].clone(), v_random_vector[i].clone()));
-        println!("+1 round");
+            assert!(g_vector[0].evaluate(&F::zero()) + g_vector[0].evaluate(&F::one()) == C);
+            let r1 = F::rand(&mut rng);
+        }else {
+            v_random_vector.push(verifier(g_vector[i].clone(), g_vector[i + 1].clone(), v_random_vector[i].clone()));
+        }
     }
 
     //VERIFIER LAST ROUDND
 //==================================================================================================
 
     //single oravle query for the verifier
+    let mut rng = ark_std::rand::thread_rng();
     let r4 = F::rand(&mut rng);
     let oracle_query:F =  array_ext.evaluate(&[v_random_vector[0], v_random_vector[1], v_random_vector[2], r4]).unwrap();
-    println!("{}", oracle_query);
     let g_last_check:F = g_vector[3].evaluate(&r4);
-    println!("{}", g_last_check);
     assert!(oracle_query == g_last_check);
+    println!("Protocol run successfully");
 
 }
