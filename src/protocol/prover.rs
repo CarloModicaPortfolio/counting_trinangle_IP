@@ -4,13 +4,15 @@ use ark_bls12_381::{Fq as F, Fq, FqParameters};
 use ark_std::{One, Zero, UniformRand};
 use ark_poly::{DenseMultilinearExtension, MultilinearExtension, Polynomial};
 use ark_poly::univariate::DensePolynomial;
-use crate::{DIM, print_type_of};
+use crate::{DIM, print_type_of, ProtocolState};
 
 
 //inputs: MLE of the function representing the adjacency  matrix A; Vector with the random values
 // history from the verifier
 //output: Polynomial g_i to give to the verifier
-pub fn prover(array_ext: &DenseMultilinearExtension<F>, mut random_values: Vec<F>) -> DensePolynomial<Fq> {
+pub fn prover(array_ext: &DenseMultilinearExtension<F>, mut state: ProtocolState) -> ProtocolState {
+
+    let mut random_values = state.random_values.clone();
 
     //The iteration is given by the length of the random values vector
     let iteration = random_values.len();
@@ -56,17 +58,20 @@ pub fn prover(array_ext: &DenseMultilinearExtension<F>, mut random_values: Vec<F
         c_left = c_left + &array_ext.evaluate(&random_values_left).unwrap();
     }
 
+    /*
     if iteration == 0{
         let c_vect = array_ext.to_evaluations();
         let C: F = c_vect.iter().sum();
-        print_type_of(&C);
-        println!("{:?}", assert_eq!(C, c_right+c_left));
+        assert_eq!(C, c_right+c_left);
         println!("Iteration 0 check passed");
     }
+    */
 
     //here we define the new polynomial
     let g_i: DensePolynomial<F> = DensePolynomial{ coeffs: vec![c_left, c_right - c_left]};
-    return g_i
+    state.g_vector.push(g_i);
+
+    return state
 }
 
 fn get_binary(mut n: i32,iteration: usize) -> Vec<Fq> {

@@ -7,7 +7,7 @@ use ark_poly::univariate::DensePolynomial;
 mod protocol;
 
 use protocol::{prover::prover,verifier::verifier};
-use protocol::ProtocolState;
+use protocol::{ProtocolState, initialize};
 
 fn print_type_of<T>(_: &T) {
     println!("{}", std::any::type_name::<T>())
@@ -35,7 +35,7 @@ fn main() {
     could be a way of doing so. I will continue the protocol pretending that array_ext is
     already multiplied by itself 3 times.
     */
-    let state = ProtocolState.inizialize(&array_ext);
+    let mut state = initialize(&array_ext);
 
 
     //PROTOCOL
@@ -44,30 +44,9 @@ fn main() {
     // Vector where the verifier will store its random values.
     let mut rng = ark_std::rand::thread_rng();
 
-    for i in 0..DIM-1 {
-        g_vector.push(prover(&array_ext, v_random_vector.clone()));
-        if i == 0{
-            g_vector.push(prover(&array_ext, v_random_vector.clone()));
-            let c_vect = array_ext.to_evaluations();
-            let C: F = c_vect.iter().sum();
-            // compute g_1(0) and g_1(1)
-
-            assert!(g_vector[0].evaluate(&F::zero()) + g_vector[0].evaluate(&F::one()) == C);
-            let r1 = F::rand(&mut rng);
-        }else {
-            v_random_vector.push(verifier(g_vector[i].clone(), g_vector[i + 1].clone(), v_random_vector[i].clone()));
-        }
+    for i in 0..DIM {
+        state = prover(&array_ext, state);
+        state = verifier(state, &array_ext);
     }
-
-    //VERIFIER LAST ROUDND
-//==================================================================================================
-
-    //single oravle query for the verifier
-    let mut rng = ark_std::rand::thread_rng();
-    let r4 = F::rand(&mut rng);
-    let oracle_query:F =  array_ext.evaluate(&[v_random_vector[0], v_random_vector[1], v_random_vector[2], r4]).unwrap();
-    let g_last_check:F = g_vector[3].evaluate(&r4);
-    assert!(oracle_query == g_last_check);
-    println!("Protocol run successfully");
 
 }
